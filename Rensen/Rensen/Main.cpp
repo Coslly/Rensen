@@ -1643,7 +1643,8 @@ void Thread_Funtion_Aimbot() noexcept//功能线程: 瞄准机器人
 						if (LocalPlayer_ActiveWeapon_ID == 64) Sleep(250); // R8左轮无法开枪修复
 						else Sleep(1);
 						ExecuteCommand("-attack");
-						if (UI_Legit_Aimbot_Key == 2 && LocalPlayer_ActiveWeapon_Type == 1) System::Mouse_Con(2, false); // 自瞄按键在右键且是手枪则脚本持续开火状态 (可有可无)						if (Global_LocalPlayer.ShotsFired() != 0) Sleep(UI_Legit_Aimbot_AutoShootDelay); // 自动开枪延迟 (缓解后座力)
+						if (UI_Legit_Aimbot_Key == 2 && LocalPlayer_ActiveWeapon_Type == 1) System::Mouse_Con(2, false); // 自瞄按键在右键且是手枪则脚本持续开火状态 (可有可无)						
+						if (Global_LocalPlayer.ShotsFired() != 0) Sleep(UI_Legit_Aimbot_AutoShootDelay); // 自动开枪延迟 (缓解后座力)
 					}
 				}
 			}
