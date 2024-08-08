@@ -1591,43 +1591,59 @@ void Thread_Funtion_Aimbot() noexcept//功能线程: 瞄准机器人
 			if (UI_Legit_Aimbot_RemoveRecoil)Recoil_Angle = Base::ViewAngles() + Local_AimPunchAngle * 2;//移除后坐力
 			else Recoil_Angle = Base::ViewAngles();
 			const auto CrosshairId = Advanced::Check_Enemy(Global_LocalPlayer.IDEntIndex_Pawn());//瞄准的实体Pawn
-			for (short i = 0; i < Global_ValidClassID.size(); ++i)//遍历优先瞄准暴露的实体
-			{
-				if (SpottedPlayer_Quantity)continue;//如果有了暴露的实体则直接返回
-				const auto PlayerPawn = Advanced::Traverse_Player(Global_ValidClassID[i]);//遍历的人物Pawn
-				if (!Advanced::Check_Enemy(PlayerPawn))continue;//队伍判断
-				const auto Angle = Variable::CalculateAngle(Global_LocalPlayer.Origin() + Global_LocalPlayer.ViewOffset(), PlayerPawn.BonePos(Aim_Parts), Recoil_Angle);//最终瞄准角度
-				if (hypot(Angle.x, Angle.y) <= Aim_Range && PlayerPawn.Spotted())SpottedPlayer_Quantity = true;
+			float minFovG = 255;
+			Variable::Vector3 targetAngle = { 0,0,0 };
+			// 遍历优先瞄准暴露的实体
+			for (short i = 0; i < Global_ValidClassID.size(); ++i) {
+				if (SpottedPlayer_Quantity) continue; // 如果有了暴露的实体则直接返回
+				const auto PlayerPawn = Advanced::Traverse_Player(Global_ValidClassID[i]); // 遍历的人物Pawn
+				if (!Advanced::Check_Enemy(PlayerPawn)) continue; // 队伍判断
+				const auto Angle = Variable::CalculateAngle(Global_LocalPlayer.Origin() + Global_LocalPlayer.ViewOffset(), PlayerPawn.BonePos(Aim_Parts), Recoil_Angle); // 最终瞄准角度
+				if (hypot(Angle.x, Angle.y) <= Aim_Range && PlayerPawn.Spotted()) {
+
+					SpottedPlayer_Quantity = true;
+				}
 			}
-			for (short i = 0; i < Global_ValidClassID.size(); ++i)//人物ID遍历
-			{
-				const auto PlayerPawn = Advanced::Traverse_Player(Global_ValidClassID[i]);//遍历的人物Pawn
-				if (!Advanced::Check_Enemy(PlayerPawn) || (UI_Legit_Aimbot_TriggerOnAim && !CrosshairId) || ((UI_Legit_Aimbot_JudgingWall || SpottedPlayer_Quantity) && !PlayerPawn.Spotted()))continue;
-				if (LocalPlayer_ActiveWeapon_Type == 4 && Variable::Coor_Dis_3D(PlayerPawn.Origin(), Global_LocalPlayer.Origin()) > UI_Legit_Armory_TriggerDistance_SHOTGUN)continue;//霰弹枪最大触发范围
-				if (UI_Legit_Armory_HitSiteParser && PlayerPawn.Health() <= 20)Aim_Parts = 4;//部位解析器 (粗制滥造)
-				const auto Angle = Variable::CalculateAngle(Global_LocalPlayer.Origin() + Global_LocalPlayer.ViewOffset(), PlayerPawn.BonePos(Aim_Parts), Recoil_Angle);//最终瞄准角度
-				const auto FovG = hypot(Angle.x, Angle.y);//圆圈范围计算
-				if (!Angle.IsZero() && FovG <= Aim_Range)//范围判断
-				{
-					Aim_Range = FovG - 2;//防止锁住两个或多个人
-					if (Global_LocalPlayer.Scoped() && LocalPlayer_ActiveWeapon_Type == 3)System::Mouse_Move(-Angle.y * Aim_Smooth * 3.5, Angle.x * Aim_Smooth * 3.5);//加快开镜时灵敏度
-					else System::Mouse_Move(-Angle.y * Aim_Smooth, Angle.x * Aim_Smooth);
-					if (UI_Legit_Aimbot_AutoShoot && CrosshairId && (!UI_Legit_Aimbot_AutoStop || LocalPlayer_ActiveWeapon_Type == 4 || Advanced::Stop_Move()) && FovG <= 1.8)//AutoShoot & AutoStop
+
+			// 遍历所有目标，找到FovG最小的目标
+			for (short i = 0; i < Global_ValidClassID.size(); ++i) {
+				const auto PlayerPawn = Advanced::Traverse_Player(Global_ValidClassID[i]); // 遍历的人物Pawn
+				if (!Advanced::Check_Enemy(PlayerPawn) || (UI_Legit_Aimbot_TriggerOnAim && !CrosshairId) || ((UI_Legit_Aimbot_JudgingWall || SpottedPlayer_Quantity) && !PlayerPawn.Spotted())) continue;
+				if (LocalPlayer_ActiveWeapon_Type == 4 && Variable::Coor_Dis_3D(PlayerPawn.Origin(), Global_LocalPlayer.Origin()) > UI_Legit_Armory_TriggerDistance_SHOTGUN) continue; // 霰弹枪最大触发范围
+				if (UI_Legit_Armory_HitSiteParser && PlayerPawn.Health() <= 20) Aim_Parts = 4; // 部位解析器 (粗制滥造)
+				Variable::Vector3 Angle = Variable::CalculateAngle(Global_LocalPlayer.Origin() + Global_LocalPlayer.ViewOffset(), PlayerPawn.BonePos(Aim_Parts), Recoil_Angle); // 最终瞄准角度
+				float FovG = hypot(Angle.x, Angle.y); // 圆圈范围计算
+
+				if (!Angle.IsZero() && FovG <= Aim_Range) { // 范围判断
+
 					{
-						if (LocalPlayer_ActiveWeapon_Type == 3 && LocalPlayer_ActiveWeapon_ID != 11 && LocalPlayer_ActiveWeapon_ID != 38)System::Key_Con(UI_Legit_Aimbot_Key, false);//单发狙击枪射击后释放触发按键
-						if (UI_Legit_Aimbot_AutoScope && LocalPlayer_ActiveWeapon_Type == 3 && !Global_LocalPlayer.Scoped())//自动开镜
-						{
+						if (FovG < minFovG) {
+							minFovG = FovG;
+							targetAngle = Angle;
+						}
+					}
+				}
+			}
+			// 瞄准FovG最小的目标
+			if (!targetAngle.IsZero()) {
+				float TarFovG = hypot(targetAngle.x, targetAngle.y); // 圆圈范围计算
+				if (TarFovG >= 0.0015) //死区，防止低平滑设置瞄准时屏幕大幅晃动
+				{
+					if (Global_LocalPlayer.Scoped() && LocalPlayer_ActiveWeapon_Type == 3) System::Mouse_Move(-targetAngle.y * Aim_Smooth * 3.5, targetAngle.x * Aim_Smooth * 3.5); // 加快开镜时灵敏度
+					else System::Mouse_Move(-targetAngle.y * Aim_Smooth, targetAngle.x * Aim_Smooth);
+					if (UI_Legit_Aimbot_AutoShoot && CrosshairId && (!UI_Legit_Aimbot_AutoStop || LocalPlayer_ActiveWeapon_Type == 4 || Advanced::Stop_Move()) && minFovG <= 1.8) { // AutoShoot & AutoStop
+						if (LocalPlayer_ActiveWeapon_Type == 3 && LocalPlayer_ActiveWeapon_ID != 11 && LocalPlayer_ActiveWeapon_ID != 38) System::Key_Con(UI_Legit_Aimbot_Key, false); // 单发狙击枪射击后释放触发按键
+						if (UI_Legit_Aimbot_AutoScope && LocalPlayer_ActiveWeapon_Type == 3 && !Global_LocalPlayer.Scoped()) { // 自动开镜
 							ExecuteCommand("+attack2");
 							Sleep(1);
 							ExecuteCommand("-attack2");
-							Sleep(100);//待扩散稳定
+							Sleep(100); // 待扩散稳定
 						}
 						ExecuteCommand("+attack");
-						if (LocalPlayer_ActiveWeapon_ID == 64)Sleep(250);//R8左轮无法开枪修复
+						if (LocalPlayer_ActiveWeapon_ID == 64) Sleep(250); // R8左轮无法开枪修复
 						else Sleep(1);
 						ExecuteCommand("-attack");
-						if (UI_Legit_Aimbot_Key == 2 && LocalPlayer_ActiveWeapon_Type == 1)System::Mouse_Con(2, false);//自瞄按键在右键且是手枪则脚本持续开火状态 (可有可无)
-						if (Global_LocalPlayer.ShotsFired() != 0)Sleep(UI_Legit_Aimbot_AutoShootDelay);//自动开枪延迟 (缓解后座力)
+						if (UI_Legit_Aimbot_Key == 2 && LocalPlayer_ActiveWeapon_Type == 1) System::Mouse_Con(2, false); // 自瞄按键在右键且是手枪则脚本持续开火状态 (可有可无)						if (Global_LocalPlayer.ShotsFired() != 0) Sleep(UI_Legit_Aimbot_AutoShootDelay); // 自动开枪延迟 (缓解后座力)
 					}
 				}
 			}
